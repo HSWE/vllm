@@ -10,6 +10,7 @@ from uuid import uuid4
 import numpy as np
 import pybase64 as base64
 from fastapi import WebSocket
+from pydantic import ValidationError
 from starlette.websockets import WebSocketDisconnect
 
 from vllm import envs
@@ -22,6 +23,7 @@ from .protocol import (
     InputAudioBufferAppend,
     InputAudioBufferCommit,
     SessionCreated,
+    SessionUpdate,
     TranscriptionDelta,
     TranscriptionDone,
 )
@@ -50,6 +52,8 @@ class RealtimeConnection:
 
         self._is_connected = False
         self._is_model_validated = False
+
+        self.language: str | None = None
 
         self._max_audio_filesize_mb = envs.VLLM_MAX_AUDIO_CLIP_FILESIZE_MB
 
@@ -103,15 +107,49 @@ class RealtimeConnection:
         event_type = event.get("type")
         if event_type == "session.update":
             logger.debug("Session updated: %s", event)
-            model = event.get("model")
+
+            try:
+                update = SessionUpdate.model_validate(event)
+            except ValidationError as exc:
+                await self.send_error(str(exc), "invalid_event")
+                return
+
+            model = update.model
+
             if model is None:
-                await self.send_error("Missing required field: model", "invalid_event")
+                await self.send_error(
+                    "Missing required field: model",
+                    "invalid_event",
+                )
                 return
+
             err = self._check_model(model)
+
             if err is not None:
-                await self.send_error(err.error.message, "model_not_found")
+                await self.send_error(
+                    err.error.message,
+                    "model_not_found",
+                )
                 return
+
+            # Only update language between generations.
+            if "language" in event:
+                if self.generation_task is not None and not self.generation_task.done():
+                    await self.send_error(
+                        "Cannot change language during an active generation",
+                        "invalid_event",
+                    )
+                    return
+
+                self.language = update.language
+
             self._is_model_validated = True
+
+            logger.info(
+                "Realtime session model=%s language=%s",
+                model,
+                self.language or "auto",
+            )
         elif event_type == "input_audio_buffer.append":
             append_event = InputAudioBufferAppend(**event)
             try:
@@ -179,7 +217,9 @@ class RealtimeConnection:
 
         # Transform to StreamingInput generator
         streaming_input_gen = self.serving.transcribe_realtime(
-            audio_stream, input_stream
+            audio_stream,
+            input_stream,
+            language=self.language,
         )
 
         # Start generation task

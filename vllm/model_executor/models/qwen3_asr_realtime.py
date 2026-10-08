@@ -188,6 +188,7 @@ class Qwen3ASRRealtimeGeneration(Qwen3ASRForConditionalGeneration, SupportsRealt
         audio_stream: AsyncGenerator[np.ndarray, None],
         input_stream: asyncio.Queue[list[int]],
         model_config: ModelConfig,
+        language: str | None = None,
     ) -> AsyncGenerator[PromptType, None]:
         processor = cached_processor_from_config(model_config)
         feature_extractor = processor.feature_extractor
@@ -205,6 +206,12 @@ class Qwen3ASRRealtimeGeneration(Qwen3ASRForConditionalGeneration, SupportsRealt
         prompt_template = (
             f"<|im_start|>user\n{audio_placeholder}<|im_end|>\n<|im_start|>assistant\n"
         )
+
+        if language is not None:
+            if language not in ("Japanese", "Chinese"):
+                raise ValueError(f"Unsupported realtime ASR language: {language}")
+
+            prompt_template += f"language {language}<asr_text>"
 
         prompt_token_ids = tokenizer.encode(prompt_template)
 

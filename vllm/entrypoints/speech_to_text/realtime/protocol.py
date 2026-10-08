@@ -36,6 +36,9 @@ class SessionUpdate(OpenAIBaseModel):
     type: Literal["session.update"] = "session.update"
     model: str | None = None
 
+    # None = automatic language detection
+    language: Literal["Japanese", "Chinese"] | None = None
+
 
 class SessionCreated(OpenAIBaseModel):
     """Connection established notification"""
