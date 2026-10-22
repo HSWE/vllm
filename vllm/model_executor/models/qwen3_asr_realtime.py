@@ -189,6 +189,7 @@ class Qwen3ASRRealtimeGeneration(Qwen3ASRForConditionalGeneration, SupportsRealt
         input_stream: asyncio.Queue[list[int]],
         model_config: ModelConfig,
         language: str | None = None,
+        prompt: str | None = None,
     ) -> AsyncGenerator[PromptType, None]:
         processor = cached_processor_from_config(model_config)
         feature_extractor = processor.feature_extractor
@@ -203,8 +204,22 @@ class Qwen3ASRRealtimeGeneration(Qwen3ASRForConditionalGeneration, SupportsRealt
         )
 
         audio_placeholder = cls.get_placeholder_str("audio", 0)
+        system_context = ""
+        if prompt:
+            context = prompt.strip()
+
+            # Prevent the supplied context from injecting ChatML delimiters.
+            if "<|" in context or "|>" in context:
+                raise ValueError("Invalid ASR context delimiters")
+
+            system_context = f"<|im_start|>system\n{context}<|im_end|>\n"
+
         prompt_template = (
-            f"<|im_start|>user\n{audio_placeholder}<|im_end|>\n<|im_start|>assistant\n"
+            f"{system_context}"
+            f"<|im_start|>user\n"
+            f"{audio_placeholder}"
+            f"<|im_end|>\n"
+            f"<|im_start|>assistant\n"
         )
 
         if language is not None:

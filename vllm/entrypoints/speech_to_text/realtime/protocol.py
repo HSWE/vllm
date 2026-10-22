@@ -38,6 +38,7 @@ class SessionUpdate(OpenAIBaseModel):
 
     # None = automatic language detection
     language: Literal["Japanese", "Chinese"] | None = None
+    prompt: str | None = Field(default=None, max_length=1200)
 
 
 class SessionCreated(OpenAIBaseModel):

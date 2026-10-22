@@ -58,6 +58,7 @@ class OpenAIServingRealtime(OpenAIServing):
         input_stream: asyncio.Queue[list[int]],
         *,
         language: str | None = None,
+        prompt: str | None = None,
     ) -> AsyncGenerator[StreamingInput, None]:
         """Transform audio stream into StreamingInput for engine.generate().
 
@@ -76,7 +77,7 @@ class OpenAIServingRealtime(OpenAIServing):
 
         # mypy is being stupid
         # TODO(Patrick) - fix this
-        if language is None:
+        if language is None and not prompt:
             raw_prompt_iter = self.model_cls.buffer_realtime_audio(
                 audio_stream,
                 input_stream,
@@ -91,7 +92,7 @@ class OpenAIServingRealtime(OpenAIServing):
 
             if not issubclass(model_cls, Qwen3ASRRealtimeGeneration):
                 raise ValueError(
-                    "Forced language is supported only by Qwen3-ASR realtime"
+                    "Language and prompt hints are supported only by Qwen3-ASR realtime"
                 )
 
             raw_prompt_iter = model_cls.buffer_realtime_audio(
@@ -99,6 +100,7 @@ class OpenAIServingRealtime(OpenAIServing):
                 input_stream,
                 model_config,
                 language=language,
+                prompt=prompt,
             )
 
         stream_input_iter = cast(

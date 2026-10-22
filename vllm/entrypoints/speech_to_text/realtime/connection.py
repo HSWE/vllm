@@ -54,6 +54,7 @@ class RealtimeConnection:
         self._is_model_validated = False
 
         self.language: str | None = None
+        self.prompt: str = ""
 
         self._max_audio_filesize_mb = envs.VLLM_MAX_AUDIO_CLIP_FILESIZE_MB
 
@@ -133,15 +134,19 @@ class RealtimeConnection:
                 return
 
             # Only update language between generations.
-            if "language" in event:
+            if "language" in event or "prompt" in event:
                 if self.generation_task is not None and not self.generation_task.done():
                     await self.send_error(
-                        "Cannot change language during an active generation",
+                        "Cannot change language or prompt during active generation",
                         "invalid_event",
                     )
                     return
 
+            if "language" in event:
                 self.language = update.language
+
+            if "prompt" in event:
+                self.prompt = update.prompt or ""
 
             self._is_model_validated = True
 
@@ -220,6 +225,7 @@ class RealtimeConnection:
             audio_stream,
             input_stream,
             language=self.language,
+            prompt=self.prompt,
         )
 
         # Start generation task
